@@ -1,0 +1,61 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Configure</title>
+	<script src="jquery-2.0.3.min.js"></script>
+	<script src="App.js"></script>
+	<script src="Config.js"></script>
+	<script>
+		$(function(){
+			// Load up values
+			var valsToLoad=['user','tuningdisplay','stringsdisplay','fretsdisplay','bShowTime','bUseFlats'];
+			$.each(valsToLoad, function(i,v){
+				$('#'+v.replace('display','')).val(app.Settings.get(v));
+			});
+
+
+		});
+	</script>
+</head>
+<body>
+	<h3>Configure</h3>
+	<p>Use these controls to configure a test</p>
+	<fieldset>
+		<label for="user">User</label>
+		<input id="user" onchange="app.Config.User=this.value">
+	</fieldset>
+	<fieldset id="fsqselect">
+		<label for="ddqselect">Presets</label>
+		<select id="ddselect" onchange="app.Config.loadPresets(this.options[this.selectedIndex].value)">
+			<option value="">- Choose -</option>
+			<option value="0">Frets 0-5</option>
+			<option value="5">Frets 5-10</option>
+			<option value="10">Frets 10-12</option>
+			<option value="12">Frets 0-12</option>
+		</select>
+	</fieldset>
+	<fieldset>
+		<label for="tuning">Tuning</label>
+		<input id="tuning" value="E,B,G,D,A,E" onchange="app.Config.Tuning=this.value">
+	</fieldset>
+	<fieldset>
+		<label for="strings">Test only strings <a href="#" onclick="alert('Comma-separate values, use - for ranges.  Examples:\n1-6: strings 1 through 6\n\n2,4,6: Even strings only');">?</a></label>
+		<input id="strings" onchange="app.Config.Strings=this.value">
+	</fieldset>
+	<fieldset>
+		<label for="frets">Test only frets</label>
+		<input id="frets" onchange="app.Config.Frets=this.value">
+	</fieldset>
+	<fieldset>
+		<input id="bShowTime" type="checkbox" onchange="app.Config.Showtime=this.checked">
+		<label for="bShowTime">Show time</label>
+		<br>
+		<input id="bUseFlats" type="checkbox" onchange="app.Config.Showflats=this.checked">
+		<label for="bUseFlats">Use flats instead of sharps</label>
+	</fieldset>
+
+	<button onclick="window.location='./';">Back</button>
+	<button accesskey='S' onclick="app.Config.save(); window.location.href='./';"><u>S</u>ave</button>
+</body>
+</html>

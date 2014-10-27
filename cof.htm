@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>cof</title>
+	<script src="jquery-2.0.3.min.js"></script>
+	<script src="Coord.js"></script>
+	<script>
+		var WIDTH=400, HEIGHT=300;
+
+		$(function(){
+			Circle.init(document.getElementById('c'), WIDTH, HEIGHT, 240);
+		});
+
+		(function(w){
+			var width, height, radius, heightOverWidth, widthOverHeight;
+			var c, ctx;
+			var BGCOLOR='#efefef';
+			var TWOPI=Math.PI*2; 			// 360 degrees
+			var HALFPI=Math.PI/2; 			//  90 degrees
+			var TWOTWELFTHSPI=2*Math.PI/12; //  30 degrees
+			var natural='\u266e', sharp='\u266f', flat='\u266d';
+			var notes=['C', 'G', 'D', 'A', 'E', 'B', 'G'+flat+'/F'+sharp, 'D'+flat, 'A'+flat, 'E'+flat, 'B'+flat, 'F'];
+			var relmins=['a', 'e', 'b', 'f#', 'c#', 'g#', 'd#/eb', 'bb', 'f', 'c', 'g', 'd'];
+			var sharpsOrFlats=[natural, '1'+sharp, '2'+sharp, '3'+sharp, '4'+sharp, '5'+sharp+'/7'+flat, '6'+sharp+'/6'+flat
+				, '5'+flat+'/7'+sharp, '4'+flat, '3'+flat, '2'+flat, '1'+flat];
+			var labelFontSize="10"; // in px
+
+			function init(Canvas, Width, Height, Radius){
+				width=Width;
+				height=Height;
+				heightOverWidth=height/width;
+				widthOverHeight=width/height;
+				radius=Radius||((width<height)?width:height);
+				c=Canvas;
+				c.width=width;
+				c.height=height;
+				ctx=c.getContext('2d');
+			}
+
+			// Returns a Coord with x, y values for lower left corner of bounding text box
+			function clockPositionToTextboxCoord(point, hour, textWidth, textHeight, jiggle){
+				var newCoord=new Coord(0, 0);
+				var textWidth=parseInt(textWidth), textHeight=parseInt(textHeight);
+				var adjust=(jiggle==null)?4:jiggle; 	// Based on quadrant we want to apply a "jiggle" to keep labels off circle strokes
+
+				switch(hour){
+					case 12: 	// point bisects bottom border of text box
+						newCoord.x=point.x-textWidth/2;
+						newCoord.y=point.y-adjust;
+						break;
+					case 1: 	// I point touches lower left corner of text box
+					case 2:
+						newCoord.x=point.x+adjust;
+						newCoord.y=point.y-adjust;
+						break;
+					case 3: 	// point bisects left border of text box
+						newCoord.x=point.x+adjust;
+						newCoord.y=point.y+textHeight/2; 
+						break;
+					case 4: 	// IV point touches upper left corner of text box
+					case 5:
+						newCoord.x=point.x+adjust;
+						newCoord.y=point.y+textHeight+adjust;
+						break;
+					case 6: 	// point bisects top border of text box
+						newCoord.x=point.x-textWidth/2;
+						newCoord.y=point.y+textHeight+adjust;
+						break;
+					case 7: 	// III point touches upper right corner of text box
+					case 8:
+						newCoord.x=point.x-textWidth-adjust;
+						newCoord.y=point.y+textHeight+adjust;
+						break;
+					case 9: 	// point bisects right border of text box
+						newCoord.x=point.x-textWidth-adjust;
+						newCoord.y=point.y+textHeight/2;
+						break;
+					case 10: 	// II point touches lower right corner of text box
+					case 11:
+						newCoord.x=point.x-textWidth-adjust;
+						newCoord.y=point.y-adjust;
+						break;
+				}
+				return newCoord;
+			}
+
+			function draw(){
+				// Clear background
+				ctx.clearRect(0, 0, width, height);
+				ctx.fillStyle=BGCOLOR;
+				ctx.fillRect(0, 0, width, height);
+
+				// Draw circles
+				var center=new Coord(0, 0);
+				center.x=c.width/2;
+				center.y=c.height/2;
+				var radius0=(.5*radius)
+					, radius1=.8*(.5*radius)
+					, radius2=.6*(.5*radius);
+				ctx.strokeStyle='black';
+				ctx.beginPath();
+				ctx.arc(center.x, center.y, radius0, 0, TWOPI);
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(center.x, center.y, radius1, 0, TWOPI);
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(center.x, center.y, radius2, 0, TWOPI);
+				ctx.stroke();
+
+				// Draw labels
+				ctx.font=labelFontSize+'px sans-serif';
+				var x, y, offset90=-1*HALFPI, tmpCoord;
+				for(var i=0; i<notes.length; i++){
+					x=center.x+radius1*Math.cos(offset90+i*TWOTWELFTHSPI);
+					y=center.y+radius1*Math.sin(offset90+i*TWOTWELFTHSPI);
+
+					// Draw the point on the circle we're hitting
+					ctx.fillStyle="red";
+					ctx.beginPath();
+					ctx.arc(x, y, 2, 0, TWOPI);
+					ctx.fill();
+
+					// Draw the calculated text bounding box
+					tmpCoord=clockPositionToTextboxCoord(new Coord(x,y), (i==0)?12:i, ctx.measureText(notes[i]).width, labelFontSize);
+					ctx.strokeStyle="orange";
+					ctx.beginPath();
+					ctx.rect(tmpCoord.x, tmpCoord.y-labelFontSize, ctx.measureText(notes[i]).width, labelFontSize);
+					ctx.stroke();
+
+					// Draw the label
+					ctx.fillStyle='#000000';
+					ctx.fillText(notes[i], tmpCoord.x, tmpCoord.y);
+
+					// Draw relative minor label
+					x=center.x+radius2*Math.cos(offset90+i*TWOTWELFTHSPI);
+					y=center.y+radius2*Math.sin(offset90+i*TWOTWELFTHSPI);
+
+					// Draw the point on the rel min circle we're hitting
+					ctx.fillStyle="blue";
+					ctx.beginPath();
+					ctx.arc(x, y, 2, 0, TWOPI);
+					ctx.fill();
+
+					// Draw the rel min label bounding box
+					tmpCoord=clockPositionToTextboxCoord(new Coord(x,y), (i==0)?12:i, ctx.measureText(sharpsOrFlats[i]).width, labelFontSize, 0);
+					ctx.strokeStyle="blue";
+					ctx.beginPath();
+					ctx.rect(tmpCoord.x, tmpCoord.y-labelFontSize, ctx.measureText(sharpsOrFlats[i]).width, labelFontSize);
+					ctx.stroke();
+
+					// Draw the relative minor label
+					ctx.fillStyle="green";
+					ctx.fillText(sharpsOrFlats[i], tmpCoord.x, tmpCoord.y);
+				}
+			}
+
+			// Export Circle to window
+			w.Circle={
+				init: init
+				, draw: draw
+			}
+		})(window);
+	</script>
+</head>
+<body>
+	<canvas id="c"></canvas>
+	<br>
+	<button onclick="Circle.draw()">Draw</button>
+</body>
+</html>

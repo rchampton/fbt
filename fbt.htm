@@ -1,0 +1,509 @@
+<!doctype html>
+<html>
+<head>
+<!--
+		TODOs
+			o Pull configuration values from app.Settings object (remove hidden fields) TODOCONFIG
+			o anim.parseField should be moved into config.htm, any remaining references removed
+			o Remove Stats TR and everything associated with it
+			o Font sizes should be calculated based on original WIDTH of canvas TODOFC
+			o Add option for timed responses
+-->
+	<meta charset="UTF-8">
+	<title>fbt</title>
+	<style type="text/css">
+		*{margin:0; padding:0;}
+	</style>
+	<script src="jquery-2.0.3.min.js"></script>
+	<script src="App.js"></script>
+	<script src="Coord.js"></script>
+	<script src="StringFret.js"></script>
+	<script src="Q.js"></script>
+	<script src="Hud.js"></script>
+	<script>
+		var TWOPI=Math.PI*2;
+		var gAnimFPS=8;
+		var gAnims=[]; // Each is an object like {type, stringFret, step, radius, fillStyle, isTarget, message}
+		var BGCOLOR='#efefef';
+		var WIDTH=590, HEIGHT=190;
+		WIDTH=$(window).width()-20;
+		HEIGHT=Math.floor(.33*WIDTH);
+		var Score={right: 0, wrong: 0, gotRight:false, alreadWrong:false, user: 'Mr Mr'};
+
+		// Define Fboard
+		var sidemargin=9
+			, w=WIDTH-2*sidemargin
+			, whratio=5.5//9.5
+			, Top=66
+			, Bottom=33
+			, h=Math.floor(w/whratio)+Top+Bottom
+			, intrastringWidth=(h-(Top + Bottom))/6
+			, fretCount=14
+			, fretWidth=(w-2*sidemargin)/fretCount
+			, dotRadius=Math.floor(.1*fretWidth)
+			, left=sidemargin+fretWidth
+			, stringLength=13*fretWidth;
+
+		var Fboard={
+			tunings: ['E','B','G','D','A','E'] /*TODOCONFIG*/ 	// Highest to lowest where index is tunings[string#-1]
+			, numStrings: 6 /*TODOCONFIG*/
+			, geometry: {
+				top: Top
+				, left: left
+				, intrastringWidth: intrastringWidth
+				, stringLength: stringLength
+				, fretCount: fretCount
+				, fretWidth: fretWidth
+				, dotRadius: dotRadius
+			}
+			, draw: function(gCtx){
+				// Draw neck
+				(function(ctx){
+					ctx.fillStyle=BGCOLOR;
+					ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+					ctx.strokeStyle='gray';
+					ctx.beginPath();
+					ctx.rect(Fboard.geometry.left, Fboard.geometry.top, Fboard.geometry.stringLength, Fboard.numStrings*Fboard.geometry.intrastringWidth);
+					ctx.stroke();
+
+					ctx.beginPath();
+					ctx.lineWidth=3.0;
+					ctx.strokeStyle='gray';
+					ctx.moveTo(Fboard.geometry.left, Fboard.geometry.top);
+					ctx.lineTo(Fboard.geometry.left, Fboard.geometry.top+Fboard.numStrings*Fboard.geometry.intrastringWidth);
+					ctx.stroke();
+					ctx.lineWidth=1;
+				})(gCtx);
+
+				// Draw frets
+				(function(ctx){
+					ctx.strokeStyle='gold';
+					ctx.beginPath();
+					for(var i=0; i<Fboard.geometry.fretCount; i++){
+						var loffset=Fboard.geometry.left;
+						var left=loffset + i*Fboard.geometry.fretWidth;
+						ctx.moveTo(left, Fboard.geometry.top);
+						ctx.lineTo(left, Fboard.geometry.top + Fboard.numStrings*Fboard.geometry.intrastringWidth);
+					}
+					ctx.stroke();
+				})(gCtx);
+
+				// Mo dots!
+				(function(ctx){
+					ctx.strokeStyle='black';
+					ctx.fillStyle='white';
+					var centerDotLine=Fboard.geometry.top 
+						+ (Fboard.numStrings-1)/2*Fboard.geometry.intrastringWidth
+						+ Fboard.geometry.intrastringWidth/2
+						, Twopi=2*Math.PI;
+
+					// 3 5 7 9 
+					for(var i=3; i<11; i+=2){
+						ctx.beginPath();
+						var left=Fboard.geometry.left 
+							+ (i-1)*Fboard.geometry.fretWidth + Fboard.geometry.fretWidth/2;
+						ctx.arc(left, centerDotLine, Fboard.geometry.dotRadius, 0, Twopi);
+						ctx.stroke();
+						ctx.fill();
+					}
+					// 12
+					ctx.beginPath();
+					var left=Fboard.geometry.left 
+						+ 11*Fboard.geometry.fretWidth + Fboard.geometry.fretWidth/2;
+					ctx.arc(left, centerDotLine - 4*Fboard.geometry.dotRadius, Fboard.geometry.dotRadius, 0, Twopi);
+					ctx.stroke();
+					ctx.fill();
+
+					ctx.beginPath();
+					ctx.arc(left, centerDotLine + 4*Fboard.geometry.dotRadius, Fboard.geometry.dotRadius, 0, Twopi);
+					ctx.stroke();
+					ctx.fill();
+				})(gCtx);
+
+				// Draw strings
+				(function(ctx){
+					ctx.beginPath();
+					ctx.strokeStyle='black';
+					ctx.font="14pt georgia italic"; /* TODOFC */
+					ctx.fillStyle="#999";
+					for(var i=0; i<Fboard.numStrings; i++){
+						var toffset=Fboard.geometry.intrastringWidth/2;
+						var top=toffset + Fboard.geometry.top + i*Fboard.geometry.intrastringWidth;
+						ctx.moveTo(Fboard.geometry.left, top);
+						ctx.lineTo(Fboard.geometry.left + Fboard.geometry.stringLength, top);
+						ctx.fillText(''+(i+1), Fboard.geometry.left-ctx.measureText(''+(i+1)).width-3, top + 6);
+					}
+					ctx.stroke();
+				})(gCtx);
+			}
+			// Given a StringFret find the center point on Canvas
+			, finger: function(ctx, stringFret, radius, fillStyle, showNote){
+				// Normalize arguments
+				radius=radius||5;
+				fillStyle=fillStyle||'gold';
+				if(showNote==undefined)showNote=true;
+
+				var center=new Coord(0,0);
+				var x=Fboard.geometry.left + Fboard.geometry.fretWidth*(stringFret.fret-1) + Math.floor(Fboard.geometry.fretWidth/2)
+					, y=Fboard.geometry.top + Fboard.geometry.intrastringWidth*stringFret.string - Math.floor(Fboard.geometry.intrastringWidth/2);
+				ctx.fillStyle=fillStyle;
+				ctx.strokeStyle="black";
+				ctx.beginPath();
+				ctx.arc(x, y, radius, 0, TWOPI);
+				ctx.stroke();
+				ctx.fill();
+				if(showNote){
+					ctx.beginPath();
+					ctx.fillStyle="black";
+					ctx.font="14px sans-serif"; // TODOFC
+					var note=stringFret.noteName();
+					ctx.fillText(note, x-(ctx.measureText(note).width/2), y+5);					
+				}
+			}
+		};
+
+		$(function(){
+			var gCanvas = document.getElementById('c')
+				, gCtx=gCanvas.getContext('2d');
+
+			// TODO font sizes need to be set relative to the width TODOFC
+			gCanvas.width=w;
+			gCanvas.height=h;
+			gCtx.scale(gCanvas.width/w, gCanvas.height/h);
+
+			gCtx.fillStyle=BGCOLOR;
+			gCtx.fillRect(0, 0, gCanvas.width, gCanvas.height);
+			Fboard.draw(gCtx);
+
+			$(gCanvas).on('click', function(e){
+				var q=anim.q;
+				if(q.type==q.Type.Identify)return; // Don't draw if user is supposed to identify
+
+				var sf=new StringFret();
+				sf.fromCoord(new Coord(e.offsetX, e.offsetY));
+				if(sf.string==0)return; // Invalid "click"
+				if(q.type==q.Type.Locate) // Don't accept clicks on unspecified string
+					if(sf.string!=q.stringFret.string)
+						return;
+
+				Fboard.draw(gCtx);
+
+				switch(q.stringFret.string==sf.string&&q.stringFret.noteName()==sf.noteName()){
+					case true:
+						Score.gotRight=true;
+						if(!Score.alreadWrong){
+							Score.right+=1;
+							gAnims.push({type: 'scoreupdate', message:'Correct!', sf: null, step: 4, fillStyle: "green", radius:0, isTarget:false});
+						}else{
+							gAnims.push({type: 'scoreupdate', message:'Good.', sf: null, step: 4, fillStyle: "#999", radius:0, isTarget:false});
+						}
+						break;
+					case false:
+						if(!Score.alreadWrong){
+							Score.wrong+=1;
+							Score.alreadWrong=true;
+						}
+						gAnims.push({type: 'scoreupdate', message:'Not quite', sf: null, step: 4, fillStyle: "#999", radius:0, isTarget:false});
+						break;
+					default:
+						throw('true/false evaluation expected');
+						break;
+				}
+
+				gAnims.push({type: 'note', message:'', sf: sf, step: 4, fillStyle: "gold", radius:Fboard.geometry.dotRadius+(Fboard.geometry.dotRadius/2), isTarget:false});
+			});
+
+			init(gCtx);
+			hud.init(gCtx);
+			$('#opts').slideToggle(0);
+
+			// Link controls to model
+/*			$.each(['randstrings','randfrets'], function(i, el){
+				anim.parseField(document.getElementById(el));
+			});*/
+
+			$('#identify>a').bind('click', function(e){
+				anim.selectAnswer(e.target);
+			});
+
+			// Kick it all off
+			anim.nextQuestion();
+			anim.start();
+		});
+
+		function init(ctx){
+			(function(w, ctx){
+				var requestId=0;
+				var lastHiResTimeStamp=0;
+				var teststrings=[1,2,3,4,5,6], testfrets=[0,1,2,3,4,5,6,7,8,9,10,11]; /*TODOCONFIG*/
+				var sfNext;
+				var q=new Q(teststrings, testfrets);
+				var promptId;
+
+				function nextQuestion(){
+					if(promptId!=undefined){
+						hud.removeMessage(promptId);
+					}
+
+					q.next(q.Type.Mixed);
+
+					switch(q.type){
+						case q.Type.Locate:
+							$('#identify').css('display', 'none');
+							break;
+						case q.Type.Identify: 
+							$('#identify').css('display', '');
+							gAnims.push({type: 'note', message: '', sf: q.stringFret, step: 1, fillStyle: "#ee7777", radius:Fboard.geometry.dotRadius+(Fboard.geometry.dotRadius/2), isTarget:true});
+							break;
+						default:
+							throw('invalid q.type value ' + q.type);
+					}
+
+					promptId=hud.pushMessage(q.prompt, null, 45, "black", "18px sans-serif"); /* TODOFC */
+				}
+
+				function updateScore(){
+/*					$('label[for=stat]').html(Score.user);
+
+					if((Score.right+Score.wrong)==0){
+						$('#stat').val(' Go!');
+						return;
+					}*/
+					var total=Score.right+Score.wrong
+						, pct=(Score.right/total).toFixed(2);
+		
+/*					var statline=Score.right + ' correct out of ' + total + ' (' + pct*100 + '%)';
+					$('#stat').val( statline );*/
+					hud.updateScore(Score.right, total, pct);
+
+					Score.gotRight=Score.alreadWrong=false;
+				}
+				
+				function clearTargetAnims(anims){
+					var tmpAnim={};
+					for(var i=anims.length; i>0; i--){
+						tmpAnim=anims[i-1];
+						if(tmpAnim.type=='note' && tmpAnim.isTarget)
+							anims.splice(i-1,1);
+					}
+				}
+
+				function processAnims(){
+					var tmpAnim={};
+					for(var i=gAnims.length; i>0; i--){
+						tmpAnim=gAnims[i-1];
+						switch(tmpAnim.type){
+							case 'note':
+								if(!tmpAnim.isTarget)
+									tmpAnim.step-=1;
+								if(tmpAnim.step===0){
+									gAnims.splice(i-1,1);
+									if(Score.gotRight){
+										nextQuestion();
+										updateScore();
+									}
+									continue;
+								}else if(q.type==q.Type.Identify && Score.gotRight){
+									// TODO should responses should have a common trigger mechanism
+									clearTargetAnims(gAnims);
+									nextQuestion();
+									updateScore();
+									return;
+								}
+
+								// Re-draw the Fboard and any fingers
+								Fboard.finger(ctx, tmpAnim.sf, tmpAnim.radius, tmpAnim.fillStyle, !tmpAnim.isTarget);
+								break;
+							case 'scoreupdate':
+								hud.drawMessage(tmpAnim.message, tmpAnim.fillStyle);
+								tmpAnim.step-=1;
+								if(tmpAnim.step==0)gAnims.splice(i-1,1);
+								break;
+							default:
+								throw('Unhandled anim type ' + tmpAnim.type);
+								break;
+						}
+					}
+				}
+
+				function nextFrame(DOMHiResTimeStamp){
+					// Only fire 4X / sec
+					if(DOMHiResTimeStamp-lastHiResTimeStamp<(1000/gAnimFPS)){
+						requestId=requestAnimationFrame(nextFrame);
+						return;
+					}
+
+					lastHiResTimeStamp=DOMHiResTimeStamp;
+
+					Fboard.draw(ctx);
+					hud.draw();
+					processAnims();
+
+					requestId=requestAnimationFrame(nextFrame);
+				}
+
+				function start(){
+					requestId=requestAnimationFrame(nextFrame);
+				}
+
+/*				function parseTestField(elInput){
+					var result=[]
+						, values=elInput.value.split(',');
+					try{
+						for(var i=0, max=values.length; i<max; i++){
+							if(values[i].indexOf('-')==-1){
+								// Individual value , not range
+								result.push(values[i]);
+							}else{
+								// Range value, get left and right
+								var left=values[i].split('-')[0]
+									, right=values[i].split('-')[1];
+								for(var j=left; j<=right; j++){
+									result.push(j);
+								}
+							}
+						}
+					}catch(e){
+						console.error('Error parsing value ' + elInput.value);
+						return;
+					}
+
+					// Set internal value based on id
+					if(elInput.id=='randstrings'){
+						teststrings=result;
+						q.validStrings=teststrings;
+					}else{
+						testfrets=result;
+						q.validFrets=testfrets;
+					}
+				}*/
+
+				function getSfNext() { return sfNext; }
+
+				function selectAnswer(elA){ // elA is the anchor tag clicked
+					var noteNameChosen=elA.innerHTML;
+
+					switch(noteNameChosen===q.stringFret.noteName()){
+						case true:
+							Score.gotRight=true;
+							if(!Score.alreadWrong){
+								Score.right+=1;
+								gAnims.push({type: 'scoreupdate', message:'Correct!', sf: null, step: 4, fillStyle: "green", radius:0, isTarget:false});
+							}else{
+								gAnims.push({type: 'scoreupdate', message:'Right...', sf: null, step: 4, fillStyle: "#999", radius:0, isTarget:false});
+							}
+							break;
+						case false:
+							if(!Score.alreadWrong){
+								Score.wrong+=1;
+								Score.alreadWrong=true;
+							}
+							gAnims.push({type: 'scoreupdate', message:'No...', sf: null, step: 4, fillStyle: "#999", radius:0, isTarget:false});
+							break;
+						default:
+							throw('true/false evaluation expected');
+							break;
+					}
+				}
+
+				// Export an anim object
+				w.anim={
+					start: start
+					, nextQuestion: nextQuestion
+//					, parseField: parseTestField
+					, sfNext: getSfNext
+					, get q() {/*this inside this fcn === w.anim, so this.q === infinite loop!*/return q;}
+					, selectAnswer: selectAnswer
+				};
+			})(window, ctx);
+		}
+	</script>
+</head>
+<body>
+	<table id="layout">
+	<tr>
+		<td>
+			<canvas id="c"></canvas>
+		</td>
+	</tr>
+	<tr>
+		<td valign="top">
+			<fieldset id="identify">
+				<legend>Which</legend>
+				<a href="#">C</a>
+				<a href="#">C#</a>
+				<a href="#">D</a>
+				<a href="#">D#</a>
+				<a href="#">E</a>
+				<a href="#">F</a>
+				<a href="#">F#</a>
+				<a href="#">G</a>
+				<a href="#">G#</a>
+				<a href="#">A</a>
+				<a href="#">A#</a>
+				<a href="#">B</a>
+			</fieldset>
+<!-- 			<fieldset>
+				<label for="stat">Stats</label>
+				<input id="stat" readonly="readonly"/>
+			</fieldset> -->
+		</td>
+	</tr>
+	<input type="hidden" id="randstrings" value="1-6">
+	<input type="hidden" id="randfrets" value="0-5">
+<!-- 	<tr>
+		<td>
+			<div id="optshdr" style="cursor:pointer" onclick="{$('#opts').slideToggle(250); $('#optarrow').html($('#optarrow').html()=='&#9658;'?'&#9660;':'&#9658;')}">
+				<span id="optarrow">&#9658;</span>Options
+			</div>
+			<div id="opts">
+				<fieldset>
+					<label for="randstrings">Strings to test</label>
+					<input id="randstrings" value="1-6" onblur="anim.parseField(this)">
+					<a href="#" onclick="alert('Comma-separate values, use - for ranges.  Examples:\n1-6: strings 1 through 6\n\n2,4,6: Even strings only');">?</a>
+				</fieldset>
+				<fieldset>
+					<label for="randfrets">Frets to test</label>
+					<input id="randfrets" value="0-5" onblur="anim.parseField(this)">
+				</fieldset>
+				<fieldset>
+					<input id="showAsFlats" type="checkbox" onchange="StringFret.prototype.toggleFlats()">
+					<label for="showAsFlats">Show notes as flats</label>
+				</fieldset>
+			</div>
+			<br>
+		</td>
+	</tr> -->
+	</table>
+
+	<button onclick="window.location.href='./';">Back</button>
+</body>
+</html>
+
+<!-- 
+The general approach::
+
+(function() {
+    var canvas = document.getElementById('canvas'),
+            context = canvas.getContext('2d');
+
+    // resize the canvas to fill browser window dynamically
+    window.addEventListener('resize', resizeCanvas, false);
+
+    function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            /**
+             * Your drawings need to be inside this function otherwise they will be reset when 
+             * you resize the browser window and the canvas goes will be cleared.
+             */
+            drawStuff(); 
+    }
+    resizeCanvas();
+
+    function drawStuff() {
+            // do your drawing stuff here
+    }
+})(); -->

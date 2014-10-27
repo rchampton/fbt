@@ -1,0 +1,272 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>fb explorer</title>
+	<script src="jquery-2.0.3.min.js"></script>
+	<script src="StringFret.js"></script>
+	<script src="Coord.js"></script>
+	<script>
+		var TWOPI=Math.PI*2;
+		var gAnimFPS=8;
+		var gAnims=[]; // Array of objs like {stringFret, step}
+		var BGCOLOR='#efefef';
+		var WIDTH=800, HEIGHT=400;
+
+		// Define a fretboard
+		var Fboard={
+			tunings: ['E','A','D','G','B','E']
+			, numStrings: 6
+			, geometry: {
+				top: 33
+				, left: 33
+				, intrastringWidth: 20
+				, stringLength: 520 // 13 * fretWidth
+				, fretCount: 12
+				, fretWidth: 40
+				, dotRadius: 5
+			}
+			, draw: function(gCtx){
+				// Draw neck
+				(function(ctx){
+					ctx.fillStyle=BGCOLOR;
+					ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+					ctx.strokeStyle='gray';
+					ctx.beginPath();
+					ctx.rect(Fboard.geometry.left, Fboard.geometry.top, Fboard.geometry.stringLength, Fboard.numStrings*Fboard.geometry.intrastringWidth);
+					ctx.stroke();
+
+					ctx.beginPath();
+					ctx.lineWidth=3.0;
+					ctx.strokeStyle='gray';
+					ctx.moveTo(Fboard.geometry.left, Fboard.geometry.top);
+					ctx.lineTo(Fboard.geometry.left, Fboard.geometry.top+Fboard.numStrings*Fboard.geometry.intrastringWidth);
+					ctx.stroke();
+					ctx.lineWidth=1;
+				})(gCtx);
+
+				// Draw frets
+				(function(ctx){
+					ctx.strokeStyle='gold';
+					ctx.beginPath();
+					for(var i=0; i<Fboard.geometry.fretCount+1; i++){
+						var loffset=Fboard.geometry.left;
+						var left=loffset + i*Fboard.geometry.fretWidth;
+						ctx.moveTo(left, Fboard.geometry.top);
+						ctx.lineTo(left, Fboard.geometry.top + Fboard.numStrings*Fboard.geometry.intrastringWidth);
+					}
+					ctx.stroke();
+				})(gCtx);
+
+				// Mo dots!
+				(function(ctx){
+					ctx.strokeStyle='black';
+					ctx.fillStyle='white';
+					var centerDotLine=Fboard.geometry.top 
+						+ (Fboard.numStrings-1)/2*Fboard.geometry.intrastringWidth
+						+ Fboard.geometry.intrastringWidth/2
+						, Twopi=2*Math.PI;
+
+					// 3 5 7 9 
+					for(var i=3; i<11; i+=2){
+						ctx.beginPath();
+						var left=Fboard.geometry.left 
+							+ (i-1)*Fboard.geometry.fretWidth + Fboard.geometry.fretWidth/2;
+						ctx.arc(left, centerDotLine, Fboard.geometry.dotRadius, 0, Twopi);
+						ctx.stroke();
+						ctx.fill();
+					}
+					// 12
+					ctx.beginPath();
+					var left=Fboard.geometry.left 
+						+ 11*Fboard.geometry.fretWidth + Fboard.geometry.fretWidth/2;
+					ctx.arc(left, centerDotLine - 4*Fboard.geometry.dotRadius, Fboard.geometry.dotRadius, 0, Twopi);
+					ctx.stroke();
+					ctx.fill();
+
+					ctx.beginPath();
+					ctx.arc(left, centerDotLine + 4*Fboard.geometry.dotRadius, Fboard.geometry.dotRadius, 0, Twopi);
+					ctx.stroke();
+					ctx.fill();
+				})(gCtx);
+
+				// Draw strings
+				(function(ctx){
+					ctx.beginPath();
+					ctx.strokeStyle='black';
+					for(var i=0; i<Fboard.numStrings; i++){
+						var toffset=Fboard.geometry.intrastringWidth/2;
+						var top=toffset + Fboard.geometry.top + i*Fboard.geometry.intrastringWidth;
+						ctx.moveTo(Fboard.geometry.left, top);
+						ctx.lineTo(Fboard.geometry.left + Fboard.geometry.stringLength, top);
+					}
+					ctx.stroke();
+				})(gCtx);
+			}
+			// Given a StringFret find the center point on Canvas
+			, finger: function(ctx, stringFret, radius){
+				radius=radius||5;
+				var center=new Coord(0,0);
+				var x=Fboard.geometry.left + Fboard.geometry.fretWidth*(stringFret.fret-1) + Math.floor(Fboard.geometry.fretWidth/2)
+					, y=Fboard.geometry.top + Fboard.geometry.intrastringWidth*stringFret.string - Math.floor(Fboard.geometry.intrastringWidth/2);
+				ctx.fillStyle="gold";
+				ctx.strokeStyle="black";
+				ctx.beginPath();
+				ctx.arc(x, y, radius, 0, TWOPI);
+				ctx.stroke();
+				ctx.fill();
+
+				ctx.beginPath();
+				ctx.fillStyle="black"; // ctx.font="28px sans-serif";
+				ctx.font="14px sans-serif"; // TODO this "fits well" with laying out scales on current geometry
+				var note=stringFret.noteName();
+				ctx.fillText(note, x-(ctx.measureText(note).width/2), y+5);
+			}
+		};
+
+		$(function(){
+			var gCanvas = document.getElementById('c')
+				, gCtx=gCanvas.getContext('2d');
+
+			gCanvas.width=WIDTH;
+			gCanvas.height=HEIGHT;
+			gCtx.scale(gCanvas.width/WIDTH, gCanvas.height/HEIGHT);
+			gCtx.fillStyle=BGCOLOR;
+			gCtx.fillRect(0, 0, gCanvas.width, gCanvas.height);
+			Fboard.draw(gCtx);
+
+			$(gCanvas).on('click', function(e){
+				if(!anim.isRunning())return;
+
+				var sf=new StringFret();
+				if(!sf.fromCoord(new Coord(e.offsetX, e.offsetY)))return;
+
+				// Does gAnims already have this note?  If so remove it, otherwise add it
+				var alreadyOn=false;
+				for(var i=0, max=gAnims.length; i<max; i++){
+					if(sf.equals(gAnims[i].sf)){
+						alreadyOn=true;
+						break;
+					}
+				}
+
+				if(alreadyOn){
+					gAnims.splice(i,1)[0].sf;
+				}
+				else gAnims.push({sf: sf, step: 4});
+			});
+
+			init(gCtx);
+			anim.toggle();
+		});
+
+		function init(ctx){
+			(function(w, ctx){
+				var requestId=0;
+				var $btn=$('#b');
+				var lastHiResTimeStamp=0;
+				var clearWhenAnimComplete=false;
+
+				function isRunning(){
+					return ($btn.html()==='Stop');
+				}
+
+				function nextFrame(DOMHiResTimeStamp){
+					// Only fire 4X / sec
+					if(DOMHiResTimeStamp-lastHiResTimeStamp<(1000/gAnimFPS)){
+						requestId=requestAnimationFrame(nextFrame);
+						return;
+					}
+
+					lastHiResTimeStamp=DOMHiResTimeStamp;
+
+					Fboard.draw(ctx);
+
+					var tmpAnim={};
+					for(var i=gAnims.length; i>0; i--){
+						tmpAnim=gAnims[i-1];
+						tmpAnim.step-=1;
+						if(clearWhenAnimComplete&&tmpAnim.step===0){
+							gAnims.splice(i-1,1);
+							continue;
+						}else if(!clearWhenAnimComplete&&tmpAnim.step<0){
+							// TODO this is hacky, adding back the last step, 
+							// should really be implemented as a property of the animation object 
+							// (ie-- gAnims[i].removeWhenAnimComplete)
+							tmpAnim.step+=1;
+						}
+
+						// Re-draw the Fboard and any fingers
+						Fboard.finger(ctx, tmpAnim.sf, 8); // TODO this "fits well" with laying out scales on current geometry
+					}
+
+					// TODO not sure this is necessary
+					if(gAnims.length==0)// If we're empty re-draw clean board
+						Fboard.draw(ctx);
+
+					requestId=requestAnimationFrame(nextFrame);
+				}
+
+				function start(){
+					console.debug('Starting...');
+					$btn.html('Stop');
+					requestId=requestAnimationFrame(nextFrame);
+				}
+
+				function stop(){
+					console.debug('Stopping...');
+					$btn.html('Run');
+					cancelAnimationFrame(requestId);
+					requestId=0;
+				}
+
+				function toggle(){
+					if(isRunning())stop();
+					else start();
+				}
+
+				function toggleClearFlag(newValue){
+					if(newValue===undefined)
+						clearWhenAnimComplete=!clearWhenAnimComplete;
+					else
+						clearWhenAnimComplete=newValue;
+
+					$('#clearAtAnimEnd')[0].checked=clearWhenAnimComplete;
+				}
+
+				// Initialize form controls
+				toggleClearFlag(clearWhenAnimComplete);
+
+				// Export an anim object
+				w.anim={
+					toggle: toggle
+					, toggleClear: toggleClearFlag
+					, isRunning: isRunning
+				};
+			})(window, ctx);
+		}
+	</script>
+</head>
+<body>
+	<table><tr>
+		<td>
+			<canvas id="c"></canvas>
+		</td>
+		<td valign="top">
+			<button id="b" onclick="anim.toggle()">Run</button>
+			<fieldset>
+				<input id="clearAtAnimEnd" type="checkbox" onchange="anim.toggleClear()">
+				<label for="clearAtAnimEnd">Clear note</label>
+			</fieldset>
+			<fieldset>
+				<input id="showAsFlats" type="checkbox" onchange="StringFret.prototype.toggleFlats()">
+				<label for="showAsFlats">Show notes as flats</label>
+			</fieldset>
+		</td>
+	</tr></table>
+
+	<br>
+
+</body>
+</html>
