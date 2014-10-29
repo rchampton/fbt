@@ -13,6 +13,19 @@
 	<title>fbt</title>
 	<style type="text/css">
 		*{margin:0; padding:0;}
+		#pitches{
+			display: table;
+			width: 99%;
+		}
+		#pitches li{
+			display: table-cell;
+			width: 8.3333334%;  /*=100/12 pitch classes*/
+			text-align: center;
+			background: #efefef;
+			white-space: nowrap;
+			font-size: 2em;
+		}
+		#pitches li a { text-decoration: none; }
 	</style>
 	<script src="jquery-2.0.3.min.js"></script>
 	<script src="App.js"></script>
@@ -431,18 +444,20 @@
 		<td valign="top">
 			<fieldset id="identify">
 				<legend>Which</legend>
-				<a href="#">C</a>
-				<a href="#">C#</a>
-				<a href="#">D</a>
-				<a href="#">D#</a>
-				<a href="#">E</a>
-				<a href="#">F</a>
-				<a href="#">F#</a>
-				<a href="#">G</a>
-				<a href="#">G#</a>
-				<a href="#">A</a>
-				<a href="#">A#</a>
-				<a href="#">B</a>
+				<ul id="pitches">
+					<li><a href="#">C</a></li>
+					<li><a href="#">C#</a></li>
+					<li><a href="#">D</a></li>
+					<li><a href="#">D#</a></li>
+					<li><a href="#">E</a></li>
+					<li><a href="#">F</a></li>
+					<li><a href="#">F#</a></li>
+					<li><a href="#">G</a></li>
+					<li><a href="#">G#</a></li>
+					<li><a href="#">A</a></li>
+					<li><a href="#">A#</a></li>
+					<li><a href="#">B</a></li>
+				</ul>
 			</fieldset>
 <!-- 			<fieldset>
 				<label for="stat">Stats</label>
